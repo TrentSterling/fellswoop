@@ -15,7 +15,7 @@ Idle chopping game on a floating island (Three.js, one HTML file). Live at https
 ## Workflow
 
 1. Edit `index.html`. Re-run `about.py fellswoop` if the About block needs refreshing.
-2. `node tools/verify.mjs` (23 checks, real GPU, real pointer). Look at `tools/out/qa-*.png`.
+2. `node tools/verify.mjs` (24 checks, real GPU, real pointer + touch aim). Look at `tools/out/qa-*.png`.
 3. UI changes: `node tools/screens.mjs` (title, results, About, workshop, day card, phone). Economy changes: `DAYS=14 BOT=lazy node tools/balance.mjs` and `BOT=greedy`.
 4. OG only if the look changed: `TX=74 TY=38 SPAN=13 X=-3.6 Z=-.6 FOCUS=1,3 WARM=10 SHOTS=12 node tools/og-shot.mjs`, pick a frame with the axe mid-frame, copy to `og-image.png`, bump `?v=`.
 5. Freeze `versions/fellswoop-vX.Y.Z.html`, CHANGELOG, commit, push, then `node tools/verify.mjs https://tront.xyz/fellswoop/`.

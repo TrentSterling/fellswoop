@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 (2026-09-23) Touch aim
+
+- **Phones: the axe hits above your finger.** On touch, the aim point sits a thumb's width above the fingertip (16% of the short screen side, 56 to 110 px) so the finger no longer hides what you are chopping. Mouse aim is unchanged and still exact.
+- Pointer capture on touch can no longer throw.
+- `tools/verify.mjs` gains a touch-vs-mouse aim check (24 checks).
+
 ## 0.5.0 (2026-09-23) FELLSWOOP
 
 First public version, at https://tront.xyz/fellswoop/. Built on ChatGPT's 0.4.1 (the axe-contact release).

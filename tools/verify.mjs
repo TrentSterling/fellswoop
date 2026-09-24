@@ -26,7 +26,7 @@ try {
   await page.front();
 
   // ---- boot, brand, page ----
-  check('boots with version 0.5.0', (await snap('s.version')) === '0.5.0');
+  check('boots with version 0.5.1', (await snap('s.version')) === '0.5.1');
   const html = await page.eval('document.documentElement.outerHTML');
   const oldName = new RegExp(['tim' + 'ber', 'living ' + 'grove'].join('|'), 'i');
   check('no old working title anywhere in the page', !oldName.test(html));
@@ -53,6 +53,14 @@ try {
   const prec = await page.eval(`${H}.precision().stats`);
   check('click lands a power chop', prec.powers >= 1, JSON.stringify(prec));
   await page.shot('tools/out/qa-chop.png');
+
+  // ---- touch aims above the fingertip (a finger must not hide the chop); mouse stays exact ----
+  const lift = await page.eval(`(()=>{const c=document.querySelector('canvas'),r=c.getBoundingClientRect(),x=r.left+r.width*.5,y=r.top+r.height*.62;
+    const ev=(type,kind)=>c.dispatchEvent(new PointerEvent(type,{pointerId:kind==='touch'?7:1,pointerType:kind,isPrimary:true,button:0,buttons:1,clientX:x,clientY:y,bubbles:true}));
+    const sy=()=>${H}.snapshot().cursor.sy/${H}.snapshot().viewport.height*r.height;
+    ev('pointerdown','touch');const touch=y-r.top-sy();ev('pointerup','touch');
+    ev('pointermove','mouse');const mouse=y-r.top-sy();return {touch:Math.round(touch),mouse:Math.round(mouse)};})()`);
+  check('touch aims above the finger, mouse aims exactly', lift.touch >= 50 && Math.abs(lift.mouse) < 2, JSON.stringify(lift));
 
   // ---- helicopter off the island ----
   await page.mouse('mouseMoved', 1230, 120);
