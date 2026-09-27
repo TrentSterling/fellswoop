@@ -1,5 +1,9 @@
 # Changelog
 
+## OG v2 (2026-09-27)
+
+- New OG image: the vector FELLSWOOP logo lockup over an in-game sandbox shot of the island. `tools/og-shot.mjs` gains `LOGO=` (overlay any SVG lockup).
+
 ## 0.5.1 (2026-09-23) Touch aim
 
 - **Phones: the axe hits above your finger.** On touch, the aim point sits a thumb's width above the fingertip (16% of the short screen side, 56 to 110 px) so the finger no longer hides what you are chopping. Mouse aim is unchanged and still exact.

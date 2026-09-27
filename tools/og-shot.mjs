@@ -23,7 +23,12 @@ try {
   let a = 0;
   const sweep = async secs => { for (let t = 0; t < secs; t += .2) { a += .19; await at(X + Math.cos(a) * 3.6, Z + Math.sin(a) * 2.3); await page.eval(`${H}.advance(.2)`); } };
   await sweep(WARM);
-  if (TITLE) await page.eval(`(()=>{const d=document.createElement('div');d.id='ogTitle';d.innerHTML='<b>FELLSWOOP</b><i></i><span>A little forest. A very busy axe.</span>';
+  if (process.env.LOGO) {
+    // Vector logo lockup (1200x520 viewBox) overlaid for the shot: LOGO=ref/fellswoop-logo.svg LW=560 LX=24 LY=14
+    const {readFileSync} = await import('node:fs');
+    const uri = 'data:image/svg+xml;base64,' + readFileSync(process.env.LOGO).toString('base64');
+    await page.eval(`(()=>{const i=new Image();i.id='ogLogo';i.src=${JSON.stringify(uri)};i.style.cssText='position:fixed;left:${process.env.LX || 24}px;top:${process.env.LY || 14}px;width:${process.env.LW || 560}px;z-index:9;pointer-events:none;filter:drop-shadow(0 6px 10px #0003)';document.body.appendChild(i);return new Promise(r=>i.onload=r)})()`);
+  } else if (TITLE) await page.eval(`(()=>{const d=document.createElement('div');d.id='ogTitle';d.innerHTML='<b>FELLSWOOP</b><i></i><span>A little forest. A very busy axe.</span>';
     const css=document.createElement('style');css.textContent="#ogTitle{position:fixed;left:${process.env.TX||40}px;top:${process.env.TY||34}px;padding:18px 34px 20px;background:#355640;color:#f2e7ce;clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 14px,100% calc(100% - 14px),calc(100% - 14px) 100%,14px 100%,0 calc(100% - 14px),0 14px);box-shadow:none;z-index:9;text-align:center}#ogTitle b{display:block;font:700 76px/1 Georgia,serif;letter-spacing:1px;text-shadow:3px 4px 0 #1f382c}#ogTitle i{display:block;height:3px;background:#cfb574;margin:12px 40px 10px}#ogTitle span{font:500 21px Trebuchet MS,Arial,sans-serif;color:#bfcda9}";
     document.head.appendChild(css);document.body.appendChild(d);})()`);
   const [FX, FZ] = (process.env.FOCUS || '').split(',').map(Number);
