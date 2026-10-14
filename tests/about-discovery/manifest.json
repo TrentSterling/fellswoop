@@ -1,8 +1,9 @@
 {
-  "sharedCommit": "ae0ad2b7e0ed4c162787d1cb23fec8c8bfee88bf",
+  "sharedCommit": "83dbfb4d8241501012c5ec22be49d79f28ccf6b7",
+  "playback": "visible-autoplay",
   "baseline": "402d9e183f189e11841040040674fae41fd2e54a",
   "game": "6a47045a8db2da71e2c1c1aa3a15dd0cdb153e733ab398e3dc49a473975b42ba",
   "original": "e086a9884a11c9c9184ba5685b0b148881d8334967005043c8ee3cee8ff984b4",
-  "css": "0471b8d1806c0a7eaeab3be67b822cb43a5278efadd103ada30a9782061fb481",
-  "js": "7deab312f84a943e6ebad4f5295fce272e2248a883b1d85d2327726f1c75e3dd"
+  "css": "70723556209736cc1d9e8dff2aa2fb5e68157d6ab0de2983406376baad85a8d0",
+  "js": "78e5f1cd0ab28f5361c445cecf6d539664d6ef5a39ceedb5228e2bfca5501bed"
 }
