@@ -9,11 +9,16 @@ const url = /^https?:/.test(target) ? target : pathToFileURL(resolve(target)).hr
 const H = 'window.__fellswoop';
 async function boot(w, h, port) {
   const page = await launch({port, width: w, height: h});
-  await page.goto(url);
-  await until(() => page.eval(`!!(${H}&&${H}.ready)`), {timeout: 60000, label: 'ready'});
-  await page.eval('localStorage.clear()');
-  await sleep(1500);
-  return page;
+  try {
+    await page.goto(url);
+    await until(() => page.eval(`!!(${H}&&${H}.ready)`), {timeout: 60000, label: 'ready'});
+    await page.eval('localStorage.clear()');
+    await sleep(1500);
+    return page;
+  } catch (error) {
+    await page.kill();
+    throw error;
+  }
 }
 const click = async (page, id) => { const r = (await page.eval(`${H}.ui()`)).find(r => r.id === id); if (!r) throw new Error('no region ' + id); await page.mouse('mousePressed', r.x, r.y); await page.mouse('mouseReleased', r.x, r.y); await sleep(400); };
 let page = await boot(1280, 800, 9393);
@@ -34,6 +39,6 @@ try {
   await page.shot('tools/out/screen-day2.png');
   console.log('audit', JSON.stringify(await page.eval(`${H}.auditSwing()`)), 'check', JSON.stringify(await page.eval(`${H}.check()`)));
   console.log('errors', page.logs.filter(l => /error|EXC/i.test(l)));
-} finally { page.kill(); }
+} finally { await page.kill(); }
 page = await boot(390, 844, 9394);
-try { await page.shot('tools/out/screen-phone.png'); } finally { page.kill(); }
+try { await page.shot('tools/out/screen-phone.png'); } finally { await page.kill(); }

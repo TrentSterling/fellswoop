@@ -20,4 +20,4 @@ try {
   }
   console.log('logs', page.logs.slice(0, 20));
 } catch (e) { console.log('ERR', e.message, page.logs.slice(0, 10)); await page.shot('tools/out/probe-fail.png'); }
-finally { page.kill(); }
+finally { await page.kill(); }

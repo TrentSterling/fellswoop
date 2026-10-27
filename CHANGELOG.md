@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 (release prepared)
+
+- Distinct special-tree collapse silhouettes: Thunder brace/recoil, Vortex counter-wind/corkscrew, Sapwood weighted bow, Seedpod compression/release. Workshop specimens share the same pose recipe.
+- Reduced-motion mode attenuates spin, travel, lean and highlights. Existing ability, damage, log-drop, regrowth and particle budgets remain unchanged.
+- Headless release tooling records owned Chrome process/profile logs, avoids focus requests and awaits cleanup. Gameplay/input assertions remain in place.
+- Release qualification and deployment are recorded in `qa/special-tree-motion/README.md`; preparing this version does not itself mean it is live.
+
 ## OG v2 (2026-09-27)
 
 - New OG image: the vector FELLSWOOP logo lockup over an in-game sandbox shot of the island. `tools/og-shot.mjs` gains `LOGO=` (overlay any SVG lockup).

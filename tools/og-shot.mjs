@@ -40,4 +40,4 @@ try {
     await page.shot(`tools/out/og-${String(i).padStart(2, '0')}.png`);
   }
   console.log('shots', SHOTS, 'errors', page.logs.filter(l => /error|EXC/i.test(l)));
-} finally { page.kill(); }
+} finally { await page.kill(); }

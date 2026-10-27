@@ -23,10 +23,9 @@ try {
   await page.goto(url);
   await until(() => page.eval(`!!(${H}&&${H}.ready)`), {timeout: 60000, label: 'reboot'});
   await sleep(1500);
-  await page.front();
 
   // ---- boot, brand, page ----
-  check('boots with version 0.5.1', (await snap('s.version')) === '0.5.1');
+  check('boots with version 0.6.0', (await snap('s.version')) === '0.6.0');
   const html = await page.eval('document.documentElement.outerHTML');
   const oldName = new RegExp(['tim' + 'ber', 'living ' + 'grove'].join('|'), 'i');
   check('no old working title anywhere in the page', !oldName.test(html));
@@ -123,7 +122,7 @@ try {
 } catch (e) {
   check('harness completed', false, e.message + ' ' + page.logs.slice(0, 5).join(' | '));
   await page.shot('tools/out/qa-fail.png').catch(() => {});
-} finally { page.kill(); }
+} finally { await page.kill(); }
 const pass = results.filter(r => r[1]).length;
 console.log(`\n${pass}/${results.length} checks passed  (${target})`);
 process.exit(pass === results.length ? 0 : 1);

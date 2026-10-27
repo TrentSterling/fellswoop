@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><meta name="theme-color" content="#8ec1cc"><title>FELLSWOOP · A little forest, a very busy axe</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><meta name="theme-color" content="#8ec1cc"><title>FELLSWOOP Â· A little forest, a very busy axe</title>
 <meta name="description" content="FELLSWOOP is a free idle chopping game in the browser: sweep a giant axe across a floating island, fell whole groves in one swoop, set off pumpkin blasts and chain lightning, hire beavers, and axe it all again tomorrow.">
 <meta name="author" content="Trent Sterling (Tront)">
 <link rel="canonical" href="https://tront.xyz/fellswoop/">
@@ -53,7 +53,7 @@ SOFTWARE.
 (() => {
   'use strict';
   const T = THREE;
-  const VERSION = '0.5.1';
+  const VERSION = '0.6.0';
   const TAU = Math.PI * 2;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const mix = (a, b, t) => a + (b - a) * t;
@@ -1365,6 +1365,48 @@ SOFTWARE.
       }
     }
   }
+  // Presentation only: ability at .09s, logs at .28s and stump at .58s are unchanged.
+  // Reuse one pose; no random draws, particles, allocations or simulation writes.
+  const specialPose={s:1,sy:1,y:0,yaw:0,leanX:0,leanZ:0,flash:0};
+  function specialFallPose(kind,age,dx,dz,calm,out=specialPose){
+    const d=Math.max(0,age),wind=smooth(d/.09),release=smooth((d-.09)/.08);
+    out.s=1;out.sy=1;out.y=0;out.yaw=0;out.leanX=0;out.leanZ=0;out.flash=0;
+    if(kind===4){
+      // Crystal branches brace, snap against the cut, then fold into the bolt.
+      const recoil=wind*(1-release),snap=Math.sin(clamp((d-.09)/.20,0,1)*Math.PI);
+      out.s=(1+.05*recoil)*(1-smooth((d-.19)/.27));
+      out.sy=1-.22*recoil+.20*snap;
+      const lean=-.16*recoil+.44*snap;
+      out.leanX=dx*lean;out.leanZ=dz*lean;out.y=.10*snap;
+      out.flash=.46*Math.max(0,1-Math.abs(d-.10)/.075);
+    }else if(kind===5){
+      // Counter-wind, then corkscrew into the already-running vortex.
+      const spin=smooth((d-.09)/.44),lift=Math.sin(spin*Math.PI);
+      out.s=(1-.10*wind)*(1-smooth((d-.12)/.41));
+      out.sy=1-.15*wind*(1-release)+.65*lift;
+      out.yaw=-.18*wind+TAU*1.05*spin;out.y=.48*spin;
+      out.leanX=-dz*.16*lift;out.leanZ=dx*.16*lift;
+      out.flash=.14*Math.sin(clamp(d/.28,0,1)*Math.PI);
+    }else if(kind===6){
+      // Resin-heavy crown bows and lands at the existing log-drop beat.
+      const bend=smooth((d-.09)/.19),settle=smooth((d-.28)/.10);
+      out.s=(1+.12*wind)*(1-smooth((d-.31)/.22));
+      out.sy=1-.18*wind-.34*bend+.09*Math.sin(settle*Math.PI);
+      const lean=.08*wind+.65*bend-.14*settle;
+      out.leanX=dx*lean;out.leanZ=dz*lean;out.y=-.035*bend;
+      out.flash=.28*Math.max(0,1-Math.abs(d-.28)/.09);
+    }else if(kind===7){
+      // Pod-bearing branches compress, spring open and recoil into the stump.
+      const spring=Math.sin(clamp((d-.09)/.24,0,1)*Math.PI),fold=smooth((d-.20)/.33);
+      out.s=(1-.08*wind+.18*spring)*(1-fold);
+      out.sy=1-.24*wind*(1-release)+.32*spring;
+      out.y=.27*spring;out.yaw=.28*spring;
+      out.leanX=-dx*.24*spring;out.leanZ=-dz*.24*spring;
+      out.flash=.22*Math.max(0,1-Math.abs(d-.12)/.10);
+    }
+    if(calm){out.y*=.18;out.yaw*=.07;out.leanX*=.25;out.leanZ*=.25;out.flash*=.18;}
+    return out;
+  }
   const treeYaw=new T.Quaternion(),treeLean=new T.Quaternion(),treeAxis=V(),treeFlash=new T.Color();
   function renderTrees(){
     for(const m of pineMeshes)m.count=0;cuts.count=0;
@@ -1372,7 +1414,7 @@ SOFTWARE.
       if(t.state==='dormant')continue;
       const model=pineMeshes[t.geoIndex],flash=t.state==='alive'?Math.max(0,1-(worldTime-t.hitAt)/.12)*.34:0;
       treeFlash.setRGB(1+flash,1+flash*.85,1+flash*.55);if(t.sapUntil>worldTime&&t.state==='alive')treeFlash.setRGB(1.45+flash,1.13+flash,.70+flash);
-      let s=t.scale,y=t.y+.21*t.scale,leanX=0,leanZ=0,ox=0,oz=0,sy=1;
+      let s=t.scale,y=t.y+.21*t.scale,leanX=0,leanZ=0,ox=0,oz=0,sy=1,twist=0;
       if(t.state==='alive'){
         const wind=.008*Math.sin(worldTime*.8+t.phase)+.004*Math.sin(worldTime*1.17+t.phase*2);
         leanX=clamp(t.sx,-.14,.14)+wind;leanZ=clamp(t.sz,-.14,.14)+wind*.35;
@@ -1383,7 +1425,11 @@ SOFTWARE.
         if(t.kind===0||t.kind===3||t.kind===8){const f=clamp(d/.65,0,1),angle=Math.pow(f,1.7)*1.43;leanX=t.fallX*angle;leanZ=t.fallZ*angle;ox=t.fallX*.11*f;oz=t.fallZ*.11*f;s*=1-smooth((d-.53)/.31);}
         else if(t.kind===2){s*=1+.12*Math.sin(clamp(d/.2,0,1)*Math.PI);s*=1-smooth((d-.13)/.30);sy=1-d*.42;}
         else if(t.kind===1){s*=1-smooth((d-.10)/.38);sy=1+.26*Math.sin(d*14);y+=Math.sin(clamp(d/.5,0,1)*Math.PI)*.30;}
-        else{const f=clamp(d/.53,0,1);s*=1-smooth(f);sy=1+f*.6;y+=f*.4;}
+        else{
+          const pose=specialFallPose(t.kind,d,t.fallX,t.fallZ,calmMotion);
+          s*=pose.s;sy=pose.sy;y+=pose.y*t.scale;twist=pose.yaw;leanX=pose.leanX;leanZ=pose.leanZ;
+          const f=pose.flash;treeFlash.setRGB(1+f,1+f*(t.kind===6?.65:1),1+f*(t.kind===6?.18:t.kind===7?.55:1));
+        }
       }else if(t.state==='stump')s=0;
       else if(t.state==='morphing')s*=1-smooth((worldTime-t.morphAt)/.32);
       else if(t.state==='growing'){
@@ -1392,7 +1438,7 @@ SOFTWARE.
       if(s<.002)continue;
       const lean=Math.hypot(leanX,leanZ);
       if(lean>.00001){treeAxis.set(leanZ,0,-leanX).normalize();treeLean.setFromAxisAngle(treeAxis,lean);}else treeLean.identity();
-      treeYaw.setFromAxisAngle(up,t.yaw);temp.position.set(t.x+ox,y,t.z+oz);temp.quaternion.copy(treeLean).multiply(treeYaw);temp.scale.set(s,sy*s,s);temp.updateMatrix();
+      treeYaw.setFromAxisAngle(up,t.yaw+twist);temp.position.set(t.x+ox,y,t.z+oz);temp.quaternion.copy(treeLean).multiply(treeYaw);temp.scale.set(s,sy*s,s);temp.updateMatrix();
       t.slot=model.count;model.setMatrixAt(model.count,temp.matrix);model.setColorAt(model.count++,treeFlash);
       if(t.state==='alive'&&t.kind===8&&t.barkStage){
         for(let j=0;j<t.barkStage;j++){
@@ -1935,7 +1981,19 @@ SOFTWARE.
       }}
     });}
     miniRing.visible=sample.triggered&&age-sample.remaining<.7&&sample.kind!==9;const r=sample.triggered?Math.max(.02,(age-sample.remaining)*recipe.range*1.3):1;miniRing.scale.setScalar(r);miniRing.material.opacity=Math.max(0,.65-(age-sample.remaining));
-    sampleTrees.forEach(t=>{t.flash=Math.max(0,t.flash-dt);t.m.rotation.z=Math.sin(t.flash*26)*t.flash*.22;t.m.material.color.setRGB(1+t.flash,1+t.flash,1+t.flash);if(t.sapUntil>worldTime)t.m.material.color.setRGB(1.45,1.13,.70);t.m.scale.setScalar(t.hp<=0?Math.max(0,1-(age-t.dead)*3):1);});
+    sampleTrees.forEach((t,i)=>{
+      t.flash=Math.max(0,t.flash-dt);t.m.position.y=.21;t.m.rotation.set(0,i===0&&sample.kind===2?.3:0,Math.sin(t.flash*26)*t.flash*.22);
+      t.m.material.color.setRGB(1+t.flash,1+t.flash,1+t.flash);if(t.sapUntil>worldTime)t.m.material.color.setRGB(1.45,1.13,.70);
+      t.m.scale.setScalar(t.hp<=0?Math.max(0,1-(age-t.dead)*3):1);
+      if(i===0&&sample.kind>=4&&sample.kind<=7&&t.hp<=0){
+        const pose=specialFallPose(sample.kind,age-t.dead,1,0,calmMotion);
+        const lean=Math.hypot(pose.leanX,pose.leanZ);
+        if(lean>.00001){treeAxis.set(pose.leanZ,0,-pose.leanX).normalize();treeLean.setFromAxisAngle(treeAxis,lean);}else treeLean.identity();
+        treeYaw.setFromAxisAngle(up,pose.yaw);t.m.quaternion.copy(treeLean).multiply(treeYaw);
+        t.m.position.y=.21+pose.y;t.m.scale.set(pose.s,pose.s*pose.sy,pose.s);
+        const f=pose.flash;t.m.material.color.setRGB(1+f,1+f*(sample.kind===6?.65:1),1+f*(sample.kind===6?.18:sample.kind===7?.55:1));
+      }
+    });
     if(age>Math.max(5,SPECIES[Math.min(sample.kind,8)].hp/Math.max(1,perks.power)*perks.period+2.0,sample.remaining+(sample.kind===5?recipe.life+1:2.5)))restartSpecimen();
   }
   function renderSpecimen(){
@@ -1952,7 +2010,7 @@ SOFTWARE.
   const UI={hideHud:false,fade:1,titleFade:0,titleDone:false,titleKind:'brand',bodyIdle:false,scale:1,W:1360,H:820,mobile:false,short:false,regions:[],focus:0,branch:0,about:false,detail:false,rect:null,texts:[],scroll:0,scrollMax:0,scrollRect:null,pageKey:'',press:null,clip:null,previewClip:null,wasOpen:false};
   const atlas=document.createElement('canvas');atlas.width=atlas.height=2048;const ac=atlas.getContext('2d');ac.fillStyle='#fff';ac.textBaseline='alphabetic';
   const glyphs={},fonts={body:'500 64px Trebuchet MS, Arial, sans-serif',bold:'700 64px Trebuchet MS, Arial, sans-serif',title:'700 64px Georgia, serif'};
-  Object.entries(fonts).forEach(([style,font],fi)=>{ac.font=font;glyphs[style]={};for(let i=32;i<128;i++){const ch=i===127?'·':String.fromCharCode(i),x=(i-32)%16*128+10,y=(fi*6+Math.floor((i-32)/16))*108+78,m=ac.measureText(ch);ac.fillText(ch,x,y);const l=Math.ceil(m.actualBoundingBoxLeft||0),r=Math.ceil(m.actualBoundingBoxRight||m.width),a=Math.ceil(m.actualBoundingBoxAscent||0),d=Math.ceil(m.actualBoundingBoxDescent||0);glyphs[style][ch]={advance:m.width,l,a,d,w:l+r+4,h:a+d+4,u0:(x-l-2)/2048,u1:(x+r+2)/2048,v0:1-(y+d+2)/2048,v1:1-(y-a-2)/2048};}});
+  Object.entries(fonts).forEach(([style,font],fi)=>{ac.font=font;glyphs[style]={};for(let i=32;i<128;i++){const ch=i===127?'Â·':String.fromCharCode(i),x=(i-32)%16*128+10,y=(fi*6+Math.floor((i-32)/16))*108+78,m=ac.measureText(ch);ac.fillText(ch,x,y);const l=Math.ceil(m.actualBoundingBoxLeft||0),r=Math.ceil(m.actualBoundingBoxRight||m.width),a=Math.ceil(m.actualBoundingBoxAscent||0),d=Math.ceil(m.actualBoundingBoxDescent||0);glyphs[style][ch]={advance:m.width,l,a,d,w:l+r+4,h:a+d+4,u0:(x-l-2)/2048,u1:(x+r+2)/2048,v0:1-(y+d+2)/2048,v1:1-(y-a-2)/2048};}});
   const fontTex=new T.CanvasTexture(atlas);fontTex.minFilter=fontTex.magFilter=T.LinearFilter;fontTex.generateMipmaps=false;
   function intersection(a,b){const x=Math.max(a.x,b.x),y=Math.max(a.y,b.y);return{x,y,w:Math.max(0,Math.min(a.x+a.w,b.x+b.w)-x),h:Math.max(0,Math.min(a.y+a.h,b.y+b.h)-y)};}
   function clipPoly(p,r){for(const [ax,v,gt]of[[0,r.x,true],[0,r.x+r.w,false],[1,r.y,true],[1,r.y+r.h,false]]){const out=[];for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length],ia=gt?a[ax]>=v:a[ax]<=v,ib=gt?b[ax]>=v:b[ax]<=v;if(ia)out.push(a);if(ia!==ib){const t=(v-a[ax])/(b[ax]-a[ax]);out.push([mix(a[0],b[0],t),mix(a[1],b[1],t)]);}}p=out;if(!p.length)break;}return p;}
@@ -2043,10 +2101,10 @@ SOFTWARE.
   function drawRunes(L){const c=columns(L.body),r=c.main;if(!UI.mobile||!UI.detail){const cell=(r.w-20)/3;text('YOUR LOADOUT',r.x,r.y,14,mutedInk);for(let i=0;i<3;i++){const x=r.x+i*(cell+10),y=r.y+30,ru=RUNES.find(q=>q.id===progress.runes[i]);cutRect(x,y,cell,UI.mobile?77:92,'#e0e5ca',7);if(ru){runeBadge(ru,x+cell/2,y+25,32,false,true);text(ru.name,x+cell/2,y+(UI.mobile?49:61),UI.mobile?14:16,ink,'center',cell-12);region('slot-'+i,x,y,cell,UI.mobile?77:92,()=>{selectedRune=ru.id;UI.detail=UI.mobile;UI.scroll=0;sample.key='';});}else{circle(x+cell/2,y+27,18,'#c7d2b7');text(String(i+1),x+cell/2,y+17,17,'#718166','center');text('Empty',x+cell/2,y+(UI.mobile?49:61),14,mutedInk,'center');}}const top=r.y+(UI.mobile?125:144),grid={x:r.x,y:top,w:r.w,h:r.y+r.h-top},cols=UI.mobile?2:4,rowH=UI.mobile?107:Math.min(151,(grid.h-8)/2);scrollArea(grid,2===cols?rowH*4:rowH*2);withClip(grid,()=>RUNES.forEach((ru,i)=>{const cw=grid.w/cols,x=grid.x+(i%cols+.5)*cw,y=grid.y+Math.floor(i/cols)*rowH+35-UI.scroll;region('rune-'+ru.id,x-cw/2+4,y-32,cw-8,rowH-4,()=>{selectedRune=ru.id;UI.detail=UI.mobile;UI.scroll=0;sample.key='';});runeBadge(ru,x,y,48,selectedRune===ru.id,rune(ru.id),!isUnlocked(ru.kind));text(ru.name,x,y+37,17,ink,'center',cw-14);}));scrollBar();}if(!UI.mobile||UI.detail){const ru=RUNES.find(q=>q.id===selectedRune)||RUNES[0],eq=rune(ru.id),locked=!isUnlocked(ru.kind),full=progress.runes.length>=3&&!eq,editable=canModify(),enabled=editable&&!locked&&!full;detailView(c.detail,ru.kind,ru.name,ru.desc,locked?'Unlock '+SPECIES[ru.kind].name+' first.':!editable?'Change runes between days.':full?'Three slots filled. Remove one first.':eq?'Equipped for the next forest.':'Free to equip and swap.',eq?'Remove rune':locked?'Locked':full?'Loadout full':'Equip rune',()=>toggleRune(ru.id),enabled,ru.id,'Runestone');}}
   function drawGrove(L){const c=columns(L.body),r=c.main;if(!UI.mobile||!UI.detail){text('FIELD GUIDE',r.x,r.y,14,mutedInk);text(unlockedKinds().length+' of '+SPECIES.length+' species',r.x+r.w,r.y,15,mutedInk,'right');const grid={x:r.x,y:r.y+36,w:r.w,h:r.h-36},cols=UI.mobile?2:3,rh=UI.mobile?127:Math.min(147,grid.h/3);scrollArea(grid,Math.ceil(SPECIES.length/cols)*rh);withClip(grid,()=>SPECIES.forEach((sp,i)=>{const cw=grid.w/cols,x=grid.x+(i%cols+.5)*cw,y=grid.y+Math.floor(i/cols)*rh+36-UI.scroll,sel=selectedSpecies===i,locked=!isUnlocked(i);region('species-'+i,x-cw/2+3,y-32,cw-6,rh-5,()=>{selectedSpecies=i;UI.detail=UI.mobile;UI.scroll=0;sample.key='';});circle(x,y,34,sel?'#d1dcb6':'#e2e5cc');icon(i,x,y,47,locked?'#9aa38a':sp.color);if(locked)lockIcon(x+27,y-25,15,'#65755e');text(sp.name,x,y+44,18,ink,'center',cw-12);text(locked?'Not discovered':fmt(sp.value)+' wood',x,y+70,14,mutedInk,'center',cw-14,'body');}));scrollBar();}if(!UI.mobile||UI.detail){const sp=SPECIES[selectedSpecies],k=selectedSpecies;detailView(c.detail,k,sp.name,sp.desc,isUnlocked(k)?fmt(sp.value)+' wood per tree  /  '+sp.hp+' health':'Not yet planted in your grove.','Replay specimen',restartSpecimen,true,'','Field guide');}}
   function lodgeContents(r){let y=r.y;text('The lodge',r.x,y,UI.mobile?28:34,ink,'left',r.w,'title');y+=45;const n=beaverCount();text(n===0?'A home for your first helper.':n+' working '+(n===1?'beaver':'beavers')+'.',r.x,y,18,mutedInk,'left',r.w,'body');y+=35;const ph=UI.mobile?190:Math.min(288,r.h-105);cutRect(r.x,y,r.w,ph,'#e1e6ce',9);sample.rect={x:r.x+5,y:y+4,w:r.w-10,h:ph-8};sample.active=true;setSpecimen('lodge-colony',9);y+=ph+15;text('Gnaw. Gather. Bring it home.',r.x+r.w/2,y,17,mutedInk,'center',r.w,'body');return y+38;}
-  function lodgeDetails(r){let y=r.y;text('Your colony',r.x,y,26,ink,'left',r.w,'title');y+=43;text(beaverCount()+' / 4 helpers',r.x,y,22,green,'left',r.w);y+=37;y+=wrapped('Helpers work on real trees and carry each harvest back to the lodge.',r.x,y,r.w,18,ink,25)+18;if(!owns('lodge'))button('hire-beaver','Hire first beaver · 35 wood',r.x,y,r.w,43,()=>buyNode('lodge'),canModify()&&progress.wood>=35,false,'primary');else button('helper-upgrades','Helper upgrades',r.x,y,r.w,43,()=>{UI.about=false;boardTab='upgrades';UI.branch=3;selectedNode=owns('crew')?'foreman':owns('twins')?'crew':'twins';UI.detail=UI.mobile;UI.scroll=0;sample.key='';});y+=67;text('PREFERRED TREES',r.x,y,13,mutedInk);y+=27;const cw=(r.w-12)/3;['nearest','pine','special'].forEach((key,i)=>button('target-'+key,['Nearest','Pines','Specials'][i],r.x+i*(cw+6),y,cw,39,()=>{progress.preference=key;progressDirty=true;saveProgress(true);},owns('foreman'),progress.preference===key));y+=55;if(!owns('foreman'))y+=wrapped('Forest foreman unlocks targeting.',r.x,y,r.w,16,mutedInk,22,'body')+12;text(fmt(stats.beaverDeliveries||0)+' deliveries this session',r.x,y,16,mutedInk,'left',r.w,'body');return y+30;}
+  function lodgeDetails(r){let y=r.y;text('Your colony',r.x,y,26,ink,'left',r.w,'title');y+=43;text(beaverCount()+' / 4 helpers',r.x,y,22,green,'left',r.w);y+=37;y+=wrapped('Helpers work on real trees and carry each harvest back to the lodge.',r.x,y,r.w,18,ink,25)+18;if(!owns('lodge'))button('hire-beaver','Hire first beaver Â· 35 wood',r.x,y,r.w,43,()=>buyNode('lodge'),canModify()&&progress.wood>=35,false,'primary');else button('helper-upgrades','Helper upgrades',r.x,y,r.w,43,()=>{UI.about=false;boardTab='upgrades';UI.branch=3;selectedNode=owns('crew')?'foreman':owns('twins')?'crew':'twins';UI.detail=UI.mobile;UI.scroll=0;sample.key='';});y+=67;text('PREFERRED TREES',r.x,y,13,mutedInk);y+=27;const cw=(r.w-12)/3;['nearest','pine','special'].forEach((key,i)=>button('target-'+key,['Nearest','Pines','Specials'][i],r.x+i*(cw+6),y,cw,39,()=>{progress.preference=key;progressDirty=true;saveProgress(true);},owns('foreman'),progress.preference===key));y+=55;if(!owns('foreman'))y+=wrapped('Forest foreman unlocks targeting.',r.x,y,r.w,16,mutedInk,22,'body')+12;text(fmt(stats.beaverDeliveries||0)+' deliveries this session',r.x,y,16,mutedInk,'left',r.w,'body');return y+30;}
   function drawLodge(L){if(UI.mobile){const r=L.body;scrollArea(r,776);withClip(r,()=>{const y=lodgeContents({x:r.x,y:r.y-UI.scroll,w:r.w-9,h:380});lodgeDetails({x:r.x,y:y+12,w:r.w-9,h:370});});UI.previewClip={...r};scrollBar();}else{const c=columns(L.body);lodgeContents(c.main);divider(c.detail);lodgeDetails(c.detail);}}
   function keyRow(key,label,x,y,w){cutRect(x,y,64,31,'#e0e4ca',4);text(key,x+32,y+7,16,'#4f6450','center',58);text(label,x+80,y+7,17,ink,'left',w-80,'body');}
-  function drawAbout(L){const r=L.body,m=UI.mobile;if(m)scrollArea(r,770);withClip(r,()=>{const y=r.y-(m?UI.scroll:0),lw=m?r.w:r.w*.49,rx=m?r.x:r.x+r.w*.60,rw=m?r.w:r.w*.4;icon(10,r.x+20,y+20,42,'#a88e53');text('FELLSWOOP',r.x+52,y+3,m?29:36,ink,'left',lw-52,'title');text('BY TRONT  /  '+VERSION,r.x,y+60,14,mutedInk);let cy=y+100;cy+=wrapped('A little forest. A very busy axe.',r.x,cy,lw,22,ink,29,'title')+17;cy+=wrapped('By Tront (Trent Sterling). Models, sounds and this interface are authored in code. More games at tront.xyz.',r.x,cy,lw,18,ink,27)+20;text('Three.js · MIT license',r.x,cy,15,mutedInk,'left',lw,'body');let ky=m?cy+43:y+4;text('CONTROLS',rx,ky,14,mutedInk);ky+=31;[['Mouse','Move to chop'],['Touch','Hold and drag'],['U','Workshop'],['Space','Pause'],['M','Sound'],['B','Sandbox'],['Esc','Back / close']].forEach(([k,label],i)=>keyRow(k,label,rx,ky+i*39,rw));const sy=m?ky+7*39+26:y+r.h-90;line(r.x,sy-16,r.x+r.w,sy-16,1,'#c0c8a9');if(!resetConfirm){text(saveAvailable?'Autosave enabled':'Storage unavailable',r.x,sy,18,saveAvailable?green:'#996239','left',m?r.w:r.w-238);text(saveAvailable?'Progress saves in this browser.':'Progress lasts for this session.',r.x,sy+27,15,mutedInk,'left',m?r.w:r.w-238,'body');button('reset','Reset progress',m?r.x:r.x+r.w-188,m?sy+61:sy+7,188,39,()=>{resetProfile();notice='';},!sandbox);}else{wrapped('Erase this grove and start over?',r.x,sy,m?r.w:r.w-340,18,'#925544',24);button('confirm-reset','Erase save',m?r.x:r.x+r.w-310,m?sy+53:sy+4,158,39,resetProfile,!sandbox,false,'danger');button('cancel-reset','Cancel',m?r.x+169:r.x+r.w-141,m?sy+53:sy+4,141,39,()=>{resetConfirm=false;notice='';});}});if(m)scrollBar();}
+  function drawAbout(L){const r=L.body,m=UI.mobile;if(m)scrollArea(r,770);withClip(r,()=>{const y=r.y-(m?UI.scroll:0),lw=m?r.w:r.w*.49,rx=m?r.x:r.x+r.w*.60,rw=m?r.w:r.w*.4;icon(10,r.x+20,y+20,42,'#a88e53');text('FELLSWOOP',r.x+52,y+3,m?29:36,ink,'left',lw-52,'title');text('BY TRONT  /  '+VERSION,r.x,y+60,14,mutedInk);let cy=y+100;cy+=wrapped('A little forest. A very busy axe.',r.x,cy,lw,22,ink,29,'title')+17;cy+=wrapped('By Tront (Trent Sterling). Models, sounds and this interface are authored in code. More games at tront.xyz.',r.x,cy,lw,18,ink,27)+20;text('Three.js Â· MIT license',r.x,cy,15,mutedInk,'left',lw,'body');let ky=m?cy+43:y+4;text('CONTROLS',rx,ky,14,mutedInk);ky+=31;[['Mouse','Move to chop'],['Touch','Hold and drag'],['U','Workshop'],['Space','Pause'],['M','Sound'],['B','Sandbox'],['Esc','Back / close']].forEach(([k,label],i)=>keyRow(k,label,rx,ky+i*39,rw));const sy=m?ky+7*39+26:y+r.h-90;line(r.x,sy-16,r.x+r.w,sy-16,1,'#c0c8a9');if(!resetConfirm){text(saveAvailable?'Autosave enabled':'Storage unavailable',r.x,sy,18,saveAvailable?green:'#996239','left',m?r.w:r.w-238);text(saveAvailable?'Progress saves in this browser.':'Progress lasts for this session.',r.x,sy+27,15,mutedInk,'left',m?r.w:r.w-238,'body');button('reset','Reset progress',m?r.x:r.x+r.w-188,m?sy+61:sy+7,188,39,()=>{resetProfile();notice='';},!sandbox);}else{wrapped('Erase this grove and start over?',r.x,sy,m?r.w:r.w-340,18,'#925544',24);button('confirm-reset','Erase save',m?r.x:r.x+r.w-310,m?sy+53:sy+4,158,39,resetProfile,!sandbox,false,'danger');button('cancel-reset','Cancel',m?r.x+169:r.x+r.w-141,m?sy+53:sy+4,141,39,()=>{resetConfirm=false;notice='';});}});if(m)scrollBar();}
   function hudPlate(x,y,w,h){cutRect(x+2,y+3,w,h,'#587662',8);cutRect(x,y,w,h,'#355640',8);}
   // 0.5: the FELLSWOOP title card on first load, a small day card on later mornings. Game-rendered, pointer-transparent.
   function drawTitle(dt){
