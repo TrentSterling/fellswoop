@@ -41,4 +41,4 @@ try {
   const check = await page.eval(`${H}.check()`);
   console.log('check', JSON.stringify(check), 'logs', page.logs.filter(l => /error|EXC/i.test(l)).slice(0, 5));
 } catch (e) { console.log('ERR', e.message, page.logs.slice(0, 5)); await page.shot('tools/out/balance-fail.png'); }
-finally { page.kill(); }
+finally { await page.kill(); }
